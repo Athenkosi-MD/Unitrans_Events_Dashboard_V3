@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>
+    Events for {{ driver_name }}
+    {% if asset %} — {{ asset }}{% endif %}
+    {% if event_type %} ({{ event_type }}){% endif %}
+</h2>
+
+<p>Total events: {{ events|length }}</p>
+
+<!-- Loading placeholder -->
+<div id="loadingMessage">Loading events...</div>
+
+<div class="events-container" style="display:none;">
+    <!-- Table container -->
+    <div class="events-table-container">
+        <table id="eventsTable">
+            <thead>
+                <tr>
+                    <th>Event Type</th>
+                    <th>Date</th>
+                    <th>Location</th>
+                    <th>Platform Speed Limit</th>
+                    <th>Vehicle Speed</th>
+                    <th>Idle Counter</th>
+                    <th>Battery Voltage</th>
+                    <th>Power Voltage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in events %}
+                <tr data-lat="{{ e.Latitude }}" data-lon="{{ e.Longitude }}"
+                    data-details="Type: {{ e.EventTypes }} | Date: {{ e.EventDate }} | Location: {{ e.LocationAddress }} | Input Id: {{ e.InputId }} | Input Name: {{ e.InputName }} | Speed Limit: {{ e.LimitValue }} | Speed: {{ e.CurrentValue }} | Idle Counter: {{ e.IdleCounter }} | Battery: {{ e.BatteryVoltage }} | Power: {{ e.PowerVoltage }}"
+                    data-google="https://www.google.com/maps?q={{ e.Latitude }},{{ e.Longitude }}">
+                    <td>{{ e.EventTypes }}</td>
+                    <td>{{ e.EventDate }}</td>
+                    <td>{{ e.LocationAddress }}</td>
+                    <td>{{ e.LimitValue }}</td>
+                    <td>{{ e.CurrentValue }}</td>
+                    <td>{{ e.IdleCounter }}</td>
+                    <td>{{ e.BatteryVoltage }}</td>
+                    <td>{{ e.PowerVoltage }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Map container -->
+    <div id="map" class="events-map"></div>
+</div>
+
+<a class="btn-back" href="{{ url_for('driver.driver_dashboard') }}">Back to Dashboard</a>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+.events-container { display: flex; gap: 20px; height: 500px; }
+.events-table-container { flex: 1; overflow-y: auto; border: 1px solid #ccc; }
+.events-map { flex: 1; }
+
+#eventsTable { width: 100%; border-collapse: collapse; }
+#eventsTable th, #eventsTable td { padding: 8px; border: 1px solid #ddd; font-size: 14px; }
+#eventsTable thead { position: sticky; top: 0; background-color: #f2f2f2; z-index: 1; }
+#eventsTable tbody tr { cursor: pointer; }
+#eventsTable tbody tr.selected { background-color: #ffe066; }
+
+.leaflet-popup-content-wrapper { background-color: #007bff !important; color: #fff !important; border-radius: 5px; font-size: 14px; padding: 8px; }
+.leaflet-popup-tip { background-color: #007bff !important; }
+.leaflet-popup-content { color: #fff !important; }
+
+.btn-back { display: inline-block; margin-top: 15px; padding: 6px 12px; background-color: #0066cc; color: #fff; text-decoration: none; border-radius: 4px; }
+.btn-back:hover { background-color: #004c99; }
+
+#loadingMessage { font-size: 16px; margin-bottom: 10px; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Show table/map container and hide loading
+    document.getElementById('loadingMessage').style.display = 'none';
+    document.querySelector('.events-container').style.display = 'flex';
+
+    // Initialize map
+    const map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
+    let allMarkers = [];
+    let selectedRow = null;
+
+    document.querySelectorAll('#eventsTable tbody tr').forEach(row => {
+        const lat = parseFloat(row.dataset.lat);
+        const lon = parseFloat(row.dataset.lon);
+        if (isNaN(lat) || isNaN(lon)) return;
+
+        const googleUrl = row.dataset.google;
+        const parts = row.dataset.details.split(' | ');
+        const htmlDetails = parts.map(part => {
+            const idx = part.indexOf(':');
+            return idx > -1 ? `<b>${part.substring(0, idx)}:</b>${part.substring(idx + 1)}` : part;
+        }).join('<br>');
+
+        const marker = L.marker([lat, lon]).addTo(map).bindPopup(htmlDetails, { maxWidth: 300 });
+        allMarkers.push({ marker, row });
+
+        row.addEventListener('click', () => {
+            if (selectedRow) selectedRow.classList.remove('selected');
+            row.classList.add('selected');
+            selectedRow = row;
+            marker.openPopup();
+            map.setView([lat, lon], 15);
+        });
+
+        row.addEventListener('dblclick', () => window.open(googleUrl, '_blank'));
+    });
+
+    if (allMarkers.length > 0) {
+        const group = L.featureGroup(allMarkers.map(m => m.marker));
+        map.fitBounds(group.getBounds().pad(0.2));
+    }
+});
+</script>
+
+<script>
+function fetchTrip(eventId) {
+    fetch(`/event_trip/${eventId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            const html = `
+                <table class="table table-striped">
+                    <tr><th>Asset</th><td>${data.asset}</td></tr>
+                    <tr><th>Driver</th><td>${data.driver}</td></tr>
+                    <tr><th>Trip Type</th><td>${data.trip_type}</td></tr>
+                    <tr><th>Start</th><td>${data.start}</td></tr>
+                    <tr><th>End</th><td>${data.end}</td></tr>
+                    <tr><th>Distance (km)</th><td>${data.distance}</td></tr>
+                    <tr><th>Max Speed</th><td>${data.max_speed}</td></tr>
+                    <tr><th>Idle Time</th><td>${data.idle_time}</td></tr>
+                    <tr><th>Start Coordinates</th><td>${data.start_coords}</td></tr>
+                    <tr><th>End Coordinates</th><td>${data.end_coords}</td></tr>
+                </table>
+            `;
+
+            document.getElementById('drilldownModalBody').innerHTML = html;
+            document.getElementById('drilldownModalLabel').textContent = 'Trip Details for Event';
+
+            const modalElement = document.getElementById('drilldownModal');
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+            modalInstance.show();
+        })
+        .catch(err => console.error(err));
+}
+</script>
+
+{% endblock %}

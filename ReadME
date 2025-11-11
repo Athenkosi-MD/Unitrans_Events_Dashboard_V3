@@ -1,0 +1,18 @@
+flask_app/
+│── app.py                  # Main Flask app
+│── config.py               # Config settings (PostgreSQL, etc.)
+│── models.py               # Database models (Drivers & Vehicles)
+│── requirements.txt        # Dependencies
+│── routes/
+│    ├── __init__.py
+│    ├── driver.py          # Driver-related routes
+│    ├── vehicle.py         # Vehicle-related routes
+│── templates/
+│    ├── base.html
+│    ├── index.html
+│    ├── driver.html
+│    ├── vehicle.html
+│── static/
+│    ├── css/
+│    │    └── style.css
+│    └── js/

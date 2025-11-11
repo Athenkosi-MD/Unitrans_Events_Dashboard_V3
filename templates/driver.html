@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block content %}
+
+
+<!-- ====================== FILTER FORM ====================== -->
+<form method="get" class="filter-form">
+    Start Date: <input type="date" name="start_date" value="{{ start_date }}">
+    End Date: <input type="date" name="end_date" value="{{ end_date }}">
+    Owner:
+    <select name="owner">
+        <option value="">All</option>
+        {% for o in owners %}
+        <option value="{{ o }}" {% if o == selected_owner %}selected{% endif %}>{{ o }}</option>
+        {% endfor %}
+    </select>
+    Driver Name:
+    <select name="driver_name">
+        <option value="">All</option>
+        {% for d in drivers %}
+        <option value="{{ d }}" {% if d == selected_driver %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+    </select>
+    Event Type:
+    <select name="event_type">
+        <option value="">All</option>
+        {% for e in event_types %}
+        <option value="{{ e }}" {% if e == selected_event_type %}selected{% endif %}>{{ e }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit">Filter</button>
+    <button type="button" onclick="window.location='{{ url_for('driver.driver_dashboard') }}'">Reset Filters</button>
+</form>
+
+<!-- ====================== DASHBOARD GRID ====================== -->
+<div class="dashboard-grid">
+
+    <!-- LEFT COLUMN: Top 10 Drivers Table -->
+    <div class="dashboard-card">
+        <div class="scrollable">
+            <table class="data-table">
+                <h6 style="text-align: center; font-weight: bold;">Top 10 Vehicles with High Event Count</h6>
+                <thead>
+                    <tr><th>Asset</th><th>Total Events</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in driver_table %}
+                    <tr class="parent-row" data-asset="{{ row.asset }}">
+                        <td>{{ row.asset }}</td>
+                        <td class="clickable" onclick="toggleDrilldown('{{ row.asset }}')">{{ row.total }}</td>
+                    </tr>
+
+                    <!-- Hidden drilldown table -->
+                    <tr class="drilldown-row" id="drilldown-{{ row.asset }}" style="display:none;">
+                        <td colspan="2">
+                            <table class="nested-table table table-striped table-sm">
+                                <thead><tr><th>Event Type</th><th>Count</th></tr></thead>
+                                <tbody>
+                                    {% for b in row.breakdown %}
+                                    <tr class="nested-link"
+                                        onclick="window.location='{{ url_for('driver.driver_events', driver_name=row.asset, event_type=b.type, asset=row.asset) }}'">
+                                        <td>{{ b.type }}</td>
+                                        <td>{{ b.count }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if driver_table|length == 0 %}
+                    <tr><td colspan="2" class="no-data">No data</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- CENTER COLUMN: Driver Chart -->
+    <div class="dashboard-card chart-card">
+        <div id="driver_chart" class="chart-container"></div>
+    </div>
+
+    <!-- RIGHT COLUMN: Event Type Totals Table -->
+    <div class="dashboard-card">
+        <h2>Event Type Totals</h2>
+        <div class="scrollable">
+            <table class="data-table">
+                <h6 style="text-align: center; font-weight: bold;">Event Totals</h6>
+                <thead>
+                    <tr><th>Event Type</th><th>Total Events</th></tr>
+                </thead>
+                <tbody>
+                    {% for etype, total in event_type_totals if total > 0 %}
+                    <tr class="parent-etype" data-etype="{{ etype }}">
+                        <td>{{ etype }}</td>
+                        <td class="clickable" onclick="toggleEtypeDrilldown('{{ etype }}')">{{ total }}</td>
+                    </tr>
+
+                    <!-- Hidden drilldown -->
+                    <tr class="drilldown-etype" id="drilldown-etype-{{ etype }}" style="display:none;">
+                        <td colspan="2">
+                            <div class="scrollable-nested">
+                                <table class="nested-table table table-striped table-sm">
+                                    <thead><tr><th>Driver Name</th><th>Count</th></tr></thead>
+                                    <tbody>
+                                        {% for row in event_type_drilldown[etype] %}
+                                        <tr onclick="window.location='{{ row.url }}'">
+                                            <td>{{ row.driver }}</td>
+                                            <td>{{ row.count }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                        {% if event_type_drilldown[etype]|length == 0 %}
+                                        <tr><td colspan="2" class="no-data">No data</td></tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ====================== DRIVER RATING / SCORE TABLE ====================== -->
+<!-- ====================== DAILY DRIVER SUMMARY ====================== -->
+
+
+<!-- ====================== BOTTOM ROW: Remaining Charts ====================== -->
+<div class="bottom-grid">
+    <div class="dashboard-card chart-card">
+        <div id="owner_drilldown_pie" class="chart-container"></div>
+    </div>
+    <div class="dashboard-card chart-card">
+        <div id="hourly_chart" class="chart-container"></div>
+    </div>
+</div>
+
+<!-- ====================== MODAL POPUP ====================== -->
+<div class="modal fade" id="drilldownModal" tabindex="-1" aria-labelledby="drilldownModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="drilldownModalLabel">Event Breakdown - Click on below to drilldown</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="drilldownModalBody">
+        <!-- Drilldown content will be dynamically injected -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== CSS for row highlight ====================== -->
+<style>
+.highlighted-row {
+  background-color: #cce5ff !important;
+  transition: background-color 0.2s ease;
+}
+.nested-table tr { cursor: pointer; }
+</style>
+
+<!-- ====================== SCRIPTS ====================== -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/modules/drilldown.js"></script>
+
+<script>
+function toggleDrilldown(asset) {
+    const row = document.getElementById('drilldown-' + asset);
+    if (!row) return;
+
+    const drilldownTable = row.querySelector('.nested-table').outerHTML;
+    document.getElementById('drilldownModalBody').innerHTML = drilldownTable;
+    document.getElementById('drilldownModalLabel').textContent = 'Event Breakdown for ' + asset;
+
+    const modalElement = document.getElementById('drilldownModal');
+    const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+    modalInstance.show();
+
+    enableRowHighlighting();
+}
+
+function toggleEtypeDrilldown(etype) {
+    const row = document.getElementById('drilldown-etype-' + etype);
+    if (!row) return;
+
+    const drilldownTable = row.querySelector('.nested-table').outerHTML;
+    document.getElementById('drilldownModalBody').innerHTML = drilldownTable;
+    document.getElementById('drilldownModalLabel').textContent = 'Driver Event Type: ' + etype;
+
+    const modalElement = document.getElementById('drilldownModal');
+    const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+    modalInstance.show();
+
+    enableRowHighlighting();
+}
+
+// Highlight selected row in modal
+function enableRowHighlighting() {
+    const rows = document.querySelectorAll('#drilldownModalBody .nested-table tbody tr');
+    rows.forEach(row => {
+        row.addEventListener('click', function () {
+            rows.forEach(r => r.classList.remove('highlighted-row'));
+            this.classList.add('highlighted-row');
+        });
+    });
+}
+
+// ====================== Highcharts ======================
+document.addEventListener('DOMContentLoaded', function () {
+    function handlePointClick(point) {
+        if (point.url) { window.open(point.url, '_blank'); return; }
+    }
+
+    Highcharts.chart('driver_chart', {
+        chart: { type: 'bar' },
+        title: { text: 'Driver Events Drilldown' },
+        xAxis: { type: 'category' },
+        yAxis: { title: { text: 'Event Count' } },
+        legend: { enabled: false },
+        plotOptions: { 
+            series: { 
+                borderWidth: 0, 
+                dataLabels: { enabled: true },
+                cursor: 'pointer',
+                point: { events: { click: function () { handlePointClick(this.options); } } }
+            }
+        },
+        series: [{ name: 'Drivers', colorByPoint: true, data: {{ chart_data_weekly|tojson }} }],
+        drilldown: { series: {{ drilldown_series_weekly|tojson }} }
+    });
+
+    Highcharts.chart('hourly_chart', {
+        chart: { type: 'column' },
+        title: { text: 'Hourly Events Drilldown per Driver/Week' },
+        xAxis: { type: 'category' },
+        yAxis: { min: 0, title: { text: 'Total Events' }, stackLabels: { enabled: true } },
+        legend: { reversed: true },
+        tooltip: { headerFormat: '<b>{point.category}</b><br/>', pointFormat: '{series.name}: {point.y}<br/>Total: {point.stackTotal}' },
+        plotOptions: {
+            column: { stacking: 'normal' },
+            series: { cursor: 'pointer', point: { events: { click: function() { handlePointClick(this.options); } } } }
+        },
+        series: {{ hourly_series|tojson }},
+        drilldown: { series: {{ hour_drilldown_series|tojson }} }
+    });
+
+    Highcharts.chart('owner_drilldown_pie', {
+        chart: { type: 'pie' },
+        title: { text: 'Events Drilldown by Depot → EventType → Top Drivers' },
+        subtitle: { text: 'Click on slices to drill down' },
+        accessibility: { announceNewData: { enabled: true } },
+        plotOptions: { 
+            series: { 
+                dataLabels: { enabled: true, format: '{point.name}: {point.y}' },
+                cursor: 'pointer',
+                point: { events: { click: function () { handlePointClick(this.options); } } }
+            }
+        },
+        tooltip: { pointFormat: '{point.name}: <b>{point.y}</b>' },
+        series: [{ name: 'Total Events', colorByPoint: true, data: {{ chart_data_owner|tojson }} }],
+        drilldown: { series: {{ drilldown_series_owner|tojson }} }
+    });
+});
+</script>
+
+{% endblock %}

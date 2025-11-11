@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Select Classification</h2>
+<select onchange="location = this.value;">
+    <option value="">--Select--</option>
+    <option value="{{ url_for('driver_bp.driver_dashboard') }}">Driver</option>
+    <option value="{{ url_for('vehicle_bp.vehicle_dashboard') }}">Vehicle</option>
+</select>
+{% endblock %}
