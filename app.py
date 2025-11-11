@@ -17,5 +17,6 @@ app.register_blueprint(vehicle_bp, url_prefix='/vehicle')
 def index():
     return redirect(url_for('vehicle.vehicle_dashboard'))  # Default landing page
 
-if __name__ == '__main__':
-    app.run(port=5080, debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+
